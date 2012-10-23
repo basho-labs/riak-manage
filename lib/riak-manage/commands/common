@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+manage_common_description () {
+    echo "This isn't a command and shouldn't show up in the command list."
+    return 0
+}
+
+manage_common_help () {
+    echo "This is not a command. It is a collection of common functions."
+    return 0
+}
+
+manage_common () {
+    error_msg "The 'common' file is not a command. This does nothing."
+    return 0
+}
+
+# formatting
+ul=$(tput smul)
+noul=$(tput rmul)
+bold=$(tput bold)
+nobold=$(tput sgr0)
+
+# Print a message to stdout and log it if logging is enabled
+msg () {
+    echo "$1"
+  
+    if [ $uselogger -eq 1 ]; then
+        logger -t $bin_name I. "$1"
+    fi
+    return 0
+}
+
+# Print a verbose message to stdout and optionally log it
+# if the verbose and/or logger options are set.
+verbose_msg () {
+    # only print if verbose is enabled
+    if [ $verbose -eq 1 ]; then
+        echo "$1"
+    
+        # only log if verbose AND uselogger are enabled
+        if [ $uselogger -eq 1 ]; then
+            logger -t $bin_name I. "$1"
+        fi
+    fi
+    return 0
+}
+
+# Print an error message to stderr and optionally log it
+# if the logging option is set
+error_msg () {
+    if [ $uselogger -eq 1 ]; then
+        logger -st $bin_name E. "$1"
+    else
+        echo "$1" >&2
+    fi
+    return 0
+}
+

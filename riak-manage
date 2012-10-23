@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+
+# Turn on extended globbing
+shopt -s extglob
+shopt -s nullglob
+
+# If RIAK_CLUSTERS is not set exit with an error
+if [ -z "$RIAK_CLUSTERS" ]; then
+    echo "Set RIAK_CLUSTERS to the path where clusters should be stored."
+    exit 1
+fi
+
+# Need to determine the script location and prefix to the needed bin and lib
+# directories
+target=$0
+
+# If executing via a series of symlinks, resolve them all the way back to the
+# script itself
+while [ -h "$target" ]; do
+    link=$(ls -ld "$target") # get a listing with name -> name 
+    link="${link#*-> }"      # extract the rightmost part of the symlink
+    if [ "${link:0:1}" = "/" ]; then
+        # link path is absolute, just need to follow it
+        target="$link"
+    else
+        # link path is relative, need to relatively follow it
+        target="${target%/*}"
+        target="$target/$link"
+    fi
+done
+
+# Have the script itself now, go to its directory and get its full path,
+# removing /bin from the end.  This takes care of relative invocations like
+# ./$bin_name
+prefix=$(cd ${target%/*} && echo $PWD${target##*/*})
+prefix=${prefix%/bin}
+
+# Set some additional convenience variables
+bin_name="riak-manage"
+libdir="${prefix}/lib/shell/$bin_name"
+cmddir="${prefix}/lib/shell/$bin_name/commands"
+templatedir="${prefix}/lib/shell/$bin_name/templates"
+uselogger=0 # might do some fun logging stuff later
+
+# Get common library functions
+if [ -f "${cmddir}/common" ]; then
+    . "${cmddir}/common"
+else
+    echo "Common functions file ${cmddir}/common could not be read" >&2
+    exit 1
+fi
+
+# Make sure there's a commands directory
+if [ ! -d ${cmddir} ]; then
+    error_msg "Error obtaining commands. Check ${cmddir}"
+    exit 1
+fi
+
+# The help command is handled as a special case to cope with incorrect
+# invocations. It is also one of two commands that can be run without giving a
+# cluster name (the other is info). Structuring it this way also allows for it
+# to work even if a cluster name is given.
+
+# Make sure we can load help and info. If not, that's a red flag.
+if [ -f "${cmddir}/help" ] && [ -f "${cmddir}/info" ]; then
+    . "${cmddir}/help"
+else
+    error_msg "Could not load essential commands. Please check your paths."
+    exit 1
+fi
+
+# No command was supplied. Try to error out helpfully
+if [ $# -eq 0 ]; then
+    manage_help
+    exit 1
+fi
+
+# At least one argument given. If is help, run help with any arguments supplied.
+# Exit with help's return value.
+if [ $1 = "help" ]; then
+    manage_help ${@:2:$#}
+    exit $?
+fi
+
+# If the argument is info, run info with the arguments supplied.
+# Exit with info's return value.
+if [ $1 = "info" ]; then
+    . "${cmddir}/info"
+    manage_info ${@:2:$#}
+    exit $?
+fi
+
+# Now, if we haven't exited:
+#   First argument is the cluster name
+#   Second argument is a command
+#   Additional arguments are parameters to the command to be run
+
+# Pop the cluster name
+cluster_name=$1
+shift
+
+# Pop the command
+cmd=$1
+shift
+
+# Ensure the command exists
+if [ ! -f "${cmddir}/${cmd}" ]; then
+    error_msg "Command '$cmd' not found. See '$bin_name help' for usage."
+    exit 1
+fi
+
+# Handle a special case of help dyslexia, e.g.:
+#   riak-manage join-all help
+if [ $# -eq 0 -a $cmd = "help" ]; then
+    # See if the 'cluster_name' is actually a command that the user probably
+    # wants help information for.
+    if [ -f "${cmddir}/${cluster_name}" ]; then
+        manage_help ${cluster_name}
+        exit 0
+    fi
+fi
+
+# Everything after the command will be passed as arguments
+function_args=${@:1:$#}
+
+# Find the directory that the existing cluster is in, if any. Don't warn if not
+# found, since some commands such as 'config' create these directories.
+cluster_dir=
+for pth in ${RIAK_CLUSTERS//:/ }; do
+    if [ -d "${pth}/${cluster_name}" ]; then
+        cluster_dir=${pth}
+        break
+    fi
+done
+
+# Dispatch the command with all of the following arguments to the appropriate,
+# sourced function
+. "${cmddir}/${cmd}"
+manage_$cmd $function_args
+exit_code=$?
+
+# Exit with the exit code returned by the command
+exit $exit_code
+

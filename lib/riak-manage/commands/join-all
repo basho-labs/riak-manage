@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+manage_join-all_description () {
+    echo "Join all nodes to node 1 using 'riak-admin join'"
+    return 0
+}
+
+manage_join-all_help () {
+    echo
+    echo "SYNOPSIS"
+    echo " $bin_name ${ul}cluster${noul} join-all ${ul}options${noul}"
+    echo
+    echo "DESCRIPTION"
+    echo " Join all other nodes to node 1 using the old-style command:"
+    echo
+    echo " riak-admin join ${ul}options${noul} node1@127.0.0.1"
+    echo
+    echo " Any ${ul}options${noul} given will be passed to the join command (for example,"
+    echo " -f to force the use of an old-style join on Riak 1.2 and newer)."
+    echo
+    return 0
+}
+
+manage_join-all () {
+    if [ -z "$cluster_dir" ]; then
+        error_msg "$cluster_name not found in RIAK_CLUSTERS environment variable."
+        return 1
+    fi
+
+    # Get the name of the first node from its vm.args file
+    node1name=$(grep '\-name' "${cluster_dir}/${cluster_name}/node1/etc/vm.args" \
+                     | awk '{print $2}')
+
+    if [ -z "$node1name" ]; then
+        error_msg "Error performing join. Could not determine the name of node 1."
+        return 1
+    fi
+
+    # Get directories for nodes 2-N with extended globbing
+    node_dirs="${cluster_dir}/${cluster_name}"/node!(*1)/
+
+    for node_dir in ${node_dirs[@]}; do
+        ${node_dir}bin/riak-admin join $@ "$node1name"
+    done
+
+    return 0
+}
+

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# The three function hooks are:
+#   manage_CMDNAME_description
+#   manage_CMDNAME_help
+#   manage_CMDNAME
+# where CMDNAME is the name of your command, and the filename
+
+manage_a-sample-cmd_description () {
+    echo "A sample command, showing how to make your own commands"
+    return 0
+}
+
+manage_a-sample-cmd_help () {
+    # You can do a heredoc style string instead of echos.
+    # See the 'config' command for an example.
+    echo
+    echo "SYNOPSIS"
+    echo " $bin_name ${ul}cluster${noul} a-sample-command ${ul}options${noul}"
+    echo
+    echo "DESCRIPTION"
+    echo " This command just shows how to write a command. Read the source!"
+    echo
+    return 0
+}
+
+manage_a-sample-cmd () {
+    if [ -z "$cluster_dir" ]; then
+        error_msg "$cluster_name not found in RIAK_CLUSTERS environment variable."
+        return 1
+    fi
+
+    echo "Cluster name: $cluster_name"
+    echo "Cluster dir:  $cluster_dir"
+    echo "Sample command arguments:"
+    for i in $@; do
+        echo "$i"
+    done
+
+    return 0
+}
+

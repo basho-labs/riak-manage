@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+manage_help_description () {
+    echo "Get help on $bin_name commands"
+    return 0
+}
+
+manage_help_help () {
+    echo
+    echo "SYNOPSIS"
+    echo " $bin_name help ${ul}command${noul}"
+    echo
+    echo "DESCRIPTION"
+    echo " Get help on a command, where command is one of the following:"
+
+    pushd "${cmddir}" >/dev/null
+
+    for cmd in !(*common); do
+        echo "  ${cmd}"
+    done
+    echo
+
+    popd >/dev/null # ${cmddir}
+
+    return 0
+}
+
+manage_help () {
+    local cmd cmd_index
+    if [ $# -eq 0 ]; then
+        echo "SYNOPSIS"
+        echo " $bin_name ${ul}cluster${noul} command ${ul}options${noul}"
+        echo
+        echo "DESCRIPTION"
+        echo " Where ${ul}command${noul} is one of the following:"
+
+        pushd "${cmddir}" >/dev/null
+        cmd_list=!(*common)
+
+        for cmd in ${cmd_list[@]}; do
+            . "${cmddir}/${cmd}"
+            echo -n "  ${cmd}"
+            let "cmd_space = 20 - ${#cmd}"
+            while [ $cmd_space -gt 0 ]; do
+                echo -n " "
+                let "cmd_space = cmd_space - 1"
+            done
+            echo "$(manage_${cmd}_description)"
+        done
+        echo
+
+        popd >/dev/null # ${cmddir}
+        return 0
+    else
+        cmd=$1
+        if [ ! -f "${cmddir}/$cmd" ]; then
+            error_msg "Command $cmd not found. Cannot provide help information."
+            return 1
+        else
+            . "${cmddir}/${cmd}"
+            manage_${cmd}_help
+            return $?
+        fi
+    fi
+}

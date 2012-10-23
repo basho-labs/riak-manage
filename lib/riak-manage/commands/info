@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+
+manage_info_description () {
+    echo "Show information about clusters"
+    return 0
+}
+
+manage_info_help () {
+cat << EOF
+
+SYNOPSIS
+ $bin_name [${ul}cluster${noul}] info ${ul}options${noul}
+
+DESCRIPTION
+ Show information about one or more clusters. If no cluster is given then a
+ listing of all known clusters is provided.
+
+ --detail    Get extended information about the cluster from node 1.
+ 
+ If the a detailed listing is specified, additional columns of information are
+ provided, where the columns are:
+
+ cluster_name num_nodes ring_create_size backend
+
+ If a cluster name is provided, then information about that cluster is shown.
+ The listing is in the format:
+
+ attribute_name attribute_value
+ 
+EOF
+    return 0
+}
+
+manage_info () {
+    # Check to see if a cluster name is defined
+    if [ -z $cluster_name ]; then
+        # No cluster, so give the list of clusters, potentially with details
+
+        # Make a list of cluster directories
+        cluster_dirs=()
+        for pth in ${RIAK_CLUSTERS//:/ }; do
+            dirs=${pth}/*/
+            cluster_dirs=( ${cluster_dirs[@]} ${dirs[@]} )
+        done
+
+        # Get just the name part from the list of directories
+        for dir in ${cluster_dirs[@]}; do
+            # strip the trailing / that they all should have because of the glob
+            cluster_name=${dir%/}
+
+            # strip everything up to the name
+            cluster_name=${cluster_name##*/}
+
+            if [ "--detail" = "$1" ]; then
+                # display detailed information for each cluster
+
+                # Get a node count from directories with extended globbing
+                node_dirs=(${dir}node*/)
+
+                # Grep for ring size, remove comments, extract the number
+                ringsize=$(grep -h ring_creation_size "$dir"/node1/etc/app.config 2>/dev/null \
+                  | grep -v %% 2>/dev/null \
+                  | sed 's/.*{ *ring_creation_size *, *\([0-9][0-9]*\) *} *, */\1/' 2>/dev/null)
+
+                # Grep for backend, remove comments, extract from riak_kv_BACKEND_backend
+                backend=$(grep -h storage_backend "$dir"/node1/etc/app.config 2>/dev/null \
+                  | grep -v %% 2>/dev/null \
+                  | sed 's/.*{ *storage_backend *, *riak_kv_\([a-z]*\)_backend *} *, */\1/' 2>/dev/null)
+
+                echo "$cluster_name ${#node_dirs[@]} $ringsize $backend"
+            else
+                # just output a list of clusters
+                echo $cluster_name
+            fi
+        done
+        return 0
+    fi
+
+    # Cluster name given. Bail out if it doesn't exist
+    if [ -z "$cluster_dir" ]; then
+        error_msg "$cluster_name not found in RIAK_CLUSTERS environment variable."
+        return 1
+    fi
+
+    # Get a node count from directories with extended globbing
+    node_dirs=("${cluster_dir}/${cluster_name}"/node*/)
+
+    # Give some simple information
+    echo "cluster_dir $cluster_dir"
+    echo "cluster_name $cluster_name"
+    echo "node_count ${#node_dirs[@]}"
+
+    if [ "--detail" = "$1" ]; then
+        # Give some additional information
+        config="${cluster_dir}/${cluster_name}"/node1/etc/app.config
+        vmargs="${cluster_dir}/${cluster_name}"/node1/etc/vm.args
+        snmpconfig="${cluster_dir}/${cluster_name}"/node1/etc/snmp/agent/conf/agent.conf
+
+        # Grep for ring size, remove comments, extract the number
+        ringsize=$(grep -h ring_creation_size "$config" 2>/dev/null \
+          | grep -v %% 2>/dev/null \
+          | sed 's/.*{ *ring_creation_size *, *\([0-9][0-9]*\) *} *, */\1/' 2>/dev/null)
+
+        # Grep for backend, remove comments, extract from riak_kv_BACKEND_backend
+        backend=$(grep -h storage_backend "$config" 2>/dev/null \
+          | grep -v %% 2>/dev/null \
+          | sed 's/.*{ *storage_backend *, *riak_kv_\([a-z]*\)_backend *} *, */\1/' 2>/dev/null)
+
+        # Try to get the version of Riak
+        riak_version=$(grep RIAK_VERSION= "${cluster_dir}/${cluster_name}"/node1/bin/riak \
+          | sed -e 's/.*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/' 2>/dev/null )
+
+        nodenet=$(grep '\-name' "${vmargs}" | awk -F '@' '{print $2}')
+
+        http=$( grep -h http $config 2>/dev/null \
+          | grep -v %% 2>/dev/null \
+          | grep -v https 2>/dev/null \
+          | grep -v http_ 2>/dev/null \
+          | sed 's/.*{ *http *, \[.*"\(.*\)".*, *\([0-9][0-9]*\) *} *\] *},* */\1:\2/' 2>/dev/null)
+
+        pbnet=$( grep -h pb_ip $config 2>/dev/null \
+          | grep -v %% 2>/dev/null \
+          | sed 's/.*{ *pb_ip *, *"\(.*\)" *},* */\1/' 2>/dev/null )
+
+        pbport=$( grep -h pb_port $config 2>/dev/null \
+          | grep -v %% 2>/dev/null \
+          | sed 's/.*{ *pb_port *, *\([0-9][0-9]*\) *},* */\1/' 2>/dev/null )
+
+        hoport=$( grep -h handoff_port $config 2>/dev/null \
+          | grep -v %% 2>/dev/null \
+          | sed 's/.*{ *handoff_port *, *\([0-9][0-9]*\) *},* */\1/' 2>/dev/null )
+
+        snmpnet=$( grep -h intAgentIpAddress $snmpconfig 2>/dev/null \
+          | sed 's/.*{ *intAgentIpAddress *, *\[\(.*\)\] *}\./\1/' 2>/dev/null )
+
+        snmpport=$( grep -h intAgentUDPPort $snmpconfig 2>/dev/null \
+          | sed 's/.*{ *intAgentUDPPort *, *\([0-9][0-9]*\) *}\./\1/' 2>/dev/null )
+
+        echo "ring_creation_size $ringsize"
+        echo "backend $backend"
+        echo "version $riak_version"
+        echo "node_net $nodenet"
+        echo "http $http"
+        echo "pb ${pbnet}:${pbport}"
+        echo "handoff $hoport "
+        echo "snmp $snmpnet:$snmpport"
+    fi
+
+    return 0
+}
+

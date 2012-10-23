@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+manage_node_description () {
+    echo "Run a command on a specified node"
+    return 0
+}
+
+manage_node_help () {
+    echo
+    echo "SYNOPSIS"
+    echo " $bin_name ${ul}cluster${noul} node ${ul}nodenum${noul} ${ul}command${noul}"
+    echo
+    echo "DESCRIPTION"
+    echo " Run ${ul}command${noul} on the node specified by ${ul}nodenum${noul}."
+    echo " The ${ul}command${noul} must exist in the node's bin directory."
+    echo
+    echo " Example:"
+    echo "  $bin_name mycluster node 1 riak-admin status"
+    echo
+    return 0
+}
+
+manage_node () {
+    if [ -z "$cluster_dir" ]; then
+        error_msg "$cluster_name not found in RIAK_CLUSTERS environment variable."
+        return 1
+    fi
+
+    nodenum=$1
+    shift
+    node_dir="${cluster_dir}/${cluster_name}/node${nodenum}"
+
+    # ensure a command was given after the node number
+    if [ $# -eq 0 ]; then
+        error_msg "No command given to run on node."
+        return 1
+    fi
+
+    # ensure the node directory exists
+    if [ ! -d "${node_dir}" ]; then
+        error_msg "Node not found:"
+        error_msg "${node_dir}"
+        return 1
+    fi
+
+    # ensure the command given exists in the node's bin directory
+    if [ ! -f "${node_dir}/bin/$1" ]; then
+        error_msg "Command given cannot be run:"
+        error_msg "${node_dir}/bin/$1"
+        return 1
+    fi
+
+    ${node_dir}/bin/$@
+}

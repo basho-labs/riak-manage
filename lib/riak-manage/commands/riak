@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+manage_riak_description () {
+    echo "Run a 'riak' command on each node"
+    return 0
+}
+
+manage_riak_help () {
+    echo
+    echo "SYNOPSIS"
+    echo " $bin_name ${ul}cluster${noul} riak ${ul}options${noul}"
+    echo
+    echo "DESCRIPTION"
+    echo " Run a 'riak' command on each node with the given ${ul}options${noul}."
+    echo
+    return 0
+}
+
+manage_riak () {
+    if [ -z "$cluster_dir" ]; then
+        error_msg "$cluster_name not found in RIAK_CLUSTERS environment variable."
+        return 1
+    fi
+
+    for node_dir in $(ls -d "${cluster_dir}/${cluster_name}"/node*); do
+        ${node_dir}/bin/riak $@
+    done
+}
