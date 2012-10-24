@@ -338,24 +338,29 @@ manage_create () {
         fi
     fi
 
-    ertsdir=("${libdir}"/erts-*)
     if [ ! -x "$bindir"/riak ] || 
        [ ! -x "$bindir"/riak-admin ] ||
        [ ! -x "$bindir"/search-cmd ]; then
-        error_msg "Error creating cluster. Check that riak, riak-admin,"
-        error_msg "and search-cmd are executable and in the path:"
+        error_msg "Error creating cluster. Check that riak, riak-admin, and search-cmd are"
+        error_msg "executable and in the path:"
         error_msg "$bindir"
         error_msg "Or, use a different path for ${ul}bindir${noul}."
         return 1
     fi
 
+    ertsdir=("${libdir}"/erts-*)
     if [ ! -d "${libdir}"/lib ] &&
        [ ! -d "${libdir}"/releases ] &&
        [ ! -d "$ertsdir" ]; then
-        error_msg "Error creating cluster. Check that lib, releases,"
-        error_msg "and erts-x.x.x are in the path:"
+        error_msg "Error creating cluster. Check that lib, releases, and erts-* are in the path:"
         error_msg "$libdir"
         error_msg "Or, use a different path for ${ul}libdir${noul}."
+        return 1
+    fi
+
+    if [ ! -d "${template_dir}/${template}" ]; then
+        error_msg "Template directory for configuration not found:"
+        error_msg "${template_dir}/${template}"
         return 1
     fi
 
@@ -379,14 +384,18 @@ manage_create () {
 
     # Edit the riak commands so they will run out of the node directories.
     # Grab the commands out of the package's bin directory
-    cp "${bindir}/riak" "${cluster_path}/${cluster_name}/cmds/"
-    cp "${bindir}/riak-admin" "${cluster_path}/${cluster_name}/cmds/"
-    cp "${bindir}/search-cmd" "${cluster_path}/${cluster_name}/cmds/"
+    cp "${bindir}/riak" "${cluster_path}/${cluster_name}/cmds/" || \
+        { error_msg "Failed to copy riak command to ${cluster_path}/${cluster_name}/cmds/"; return 1; }
+    cp "${bindir}/riak-admin" "${cluster_path}/${cluster_name}/cmds/" || \
+        { error_msg "Failed to copy riak-admin command to ${cluster_path}/${cluster_name}/cmds/"; return 1; }
+    cp "${bindir}/search-cmd" "${cluster_path}/${cluster_name}/cmds/" || \
+        { error_msg "Failed to copy search-cmd command to ${cluster_path}/${cluster_name}/cmds/"; return 1; }
     riak_cmds=( riak riak-admin search-cmd )
 
     # If there's a riak-repl, get that also
     if [ -x "${bindir}/riak-repl" ]; then
-        cp "${bindir}/riak-repl" "${cluster_path}/${cluster_name}/cmds/"
+        cp "${bindir}/riak-repl" "${cluster_path}/${cluster_name}/cmds/" || \
+            { error_msg "Failed to copy riak-repl command to ${cluster_path}/${cluster_name}/cmds/"; return 1; }
         riak_cmds=( riak riak-admin search-cmd riak-repl )
     fi
 
@@ -406,7 +415,7 @@ manage_create () {
             -e 's#^PLATFORM_DATA_DIR=.*#PLATFORM_DATA_DIR=./data#' \
             "${cluster_path}/${cluster_name}/cmds/${riak_cmd}"
 
-        if [ $? -ne 0 ]; then
+        if [ 0 -ne $? ]; then
             error_msg "Problem creating modified Riak commands"
             return 1
         else
@@ -418,31 +427,49 @@ manage_create () {
     for ((i=1; i<=$nodes; i++)); do
         # Start with the node's directory skeleton
         nodedir="${cluster_path}/${cluster_name}/node${i}"
-        mkdir -p "${nodedir}"/{bin,log,etc,data/snmp/agent/db}
-        if [ $? -ne 0 ]; then
+        mkdir -p "${nodedir}"/{bin,log,data/snmp/agent/db}
+        if [ 0 -ne $? ]; then
             error_msg "Error creating cluster. Could not 'mkdir -p' the paths:"
-            error_msg "${nodedir}"/{bin,log,etc,data/snmp/agent/db}
+            error_msg "${nodedir}"/{bin,log,data/snmp/agent/db}
             return 1
         fi
 
         # Get the node's modified commands
-        cp "${cluster_path}"/"${cluster_name}"/cmds/* "${nodedir}/bin/"
+        cp "${cluster_path}"/"${cluster_name}"/cmds/* "${nodedir}/bin/" || \
+            { error_msg "Failed to copy commands to ${nodedir}/bin/"; return 1; }
 
-        ln -sf "${libdir}/lib" "${nodedir}/lib"
-        ln -sf "${libdir}/releases" "${nodedir}/releases"
-        ln -sf "${ertsdir}" "${nodedir}"/${erts_dir///erts-*}
+        ln -sf "${libdir}/lib" "${nodedir}/lib" || \
+            { error_msg "Error creating ${nodedir}/lib"; return 1; }
+        ln -sf "${libdir}/releases" "${nodedir}/releases" || \
+            { error_msg "Error creating ${nodedir}/releases"; return 1; }
+        ln -sf "${ertsdir}" "${nodedir}"/${erts_dir///erts-*} || \
+            { error_msg "Error creating ${nodedir}"/${erts_dir///erts-*}; return 1; }
 
         # generate config for each node
-        cp "${template_dir}/${template}" "${nodedir}/etc/"
+        cp -R "${template_dir}/${template}" "${nodedir}/etc" || \
+            { error_msg "Failed to copy template to ${nodedir}/etc"; return 1; }
 
-        cp "${template_dir}/${template}/app.config" "${nodedir}/etc/"
-        cp "${template_dir}/${template}/vm.args" "${nodedir}/etc/"
-        cp -R "${template_dir}/${template}/snmp" "${nodedir}/etc/"
+        # check to ensure that the template contained the essentials
+        if [ ! -f "${nodedir}/etc/app.config" ]; then
+            error_msg "Node configuration file not found:"
+            error_msg "${nodedir}/etc/app.config"
+        fi
+
+        if [ ! -f "${nodedir}/etc/vm.args" ]; then
+            error_msg "Node configuration file not found:"
+            error_msg "${nodedir}/etc/vm.args"
+        fi
 
         # replace the template stand-ins with the given config options
         sed -i.template -e "s#RIAK_MANAGE_NODENET#$nodenet#" \
                         -e "s#RIAK_MANAGE_NODENAME#${cluster_name}-node${i}#" \
                         "${nodedir}/etc/vm.args"
+
+        if [ 0 -ne $? ]; then
+            error_msg "Error applying configuration to file:"
+            error_msg "${nodedir}/etc/vm.args"
+            return 1
+        fi
 
         sed -i.template -e "s#RIAK_MANAGE_BACKEND#$backend#" \
                         -e "s#RIAK_MANAGE_HTTPNET#$httpnet#" \
@@ -459,9 +486,23 @@ manage_create () {
                         -e "s#RIAK_MANAGE_RING_SIZE#${ring_size}#" \
                         "${nodedir}/etc/app.config"
 
-        sed -i.template -e "s#RIAK_MANAGE_SNMPNET#$snmpnet#" \
-                        -e "s#RIAK_MANAGE_SNMPPORT#$(( $snmpport + $i ))#" \
-                        "${nodedir}/etc/snmp/agent/conf/agent.conf"
+        if [ 0 -ne $? ]; then
+            error_msg "Error applying configuration to file:"
+            error_msg "${nodedir}/etc/app.config"
+            return 1
+        fi
+
+        if [ -f "${nodedir}/etc/snmp/agent/conf/agent.conf" ]; then
+            sed -i.template -e "s#RIAK_MANAGE_SNMPNET#$snmpnet#" \
+                            -e "s#RIAK_MANAGE_SNMPPORT#$(( $snmpport + $i ))#" \
+                            "${nodedir}/etc/snmp/agent/conf/agent.conf"
+        fi
+
+        if [ 0 -ne $? ]; then
+            error_msg "Error applying configuration to file:"
+            error_msg "${nodedir}/etc/snmp/agent/conf/agent.conf"
+            return 1
+        fi
 
     done
 
