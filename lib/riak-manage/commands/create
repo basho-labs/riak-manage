@@ -18,13 +18,14 @@ DESCRIPTION
                    Default: First path in RIAK_CLUSTERS environment variable.
 
  --bindir BINDIR   Path to the riak commands to be used for the cluster.
-                   Ex: /usr/sbin
+                   Example: /usr/sbin
                    Default: Path to riak in the PATH environment variable.
 
  --libdir LIBDIR   Path to the riak libraries to be used for the cluster. The
                    path should contain the lib, releases, and erts-x.x.x dirs.
-                   Ex: /usr/lib/riak
-                   Default: Determined from the riak command in PATH.
+                   Example: /usr/lib/riak
+                   Default: Determined from the riak command in PATH or from
+                            the path specified with the --bindir option.
 
  --template TPLDIR Name of the template directory that should be used to
                    generate the node configurations. The directory is relative
@@ -69,6 +70,31 @@ EOF
     return 0
 }
 
+# Set libdir based on the value of bindir.
+# The only value this should consult is bindir.
+# The only value it should set is libdir.
+set_libdir () {
+    if [ -z "$bindir" ]; then
+        libdir=
+    fi
+
+    # the most typical scenario is prefix/lib/riak/{lib,releases,erts-x.x.x}
+    libdir="${bindir%/bin}"
+    libdir="${libdir%/sbin}/lib/riak"
+
+    if [ ! -d "$libdir" ]; then
+        # if that's not around, try lib64
+        libdir="${bindir%/bin}"
+        libdir="${libdir%/sbin}/lib64/riak"
+        if [ ! -d "$libdir" ]; then
+            # if that's not it, then probably on OSX and path is something like:
+            # /path/to/riak_ee-x.x.x/{bin,lib,releases,erts-x.x.x}
+            libdir="${bindir%/bin}"
+            libdir="${libdir%/sbin/riak}"
+        fi
+    fi
+}
+
 create_defaults () {
     template="default"
     ring_size="64"
@@ -87,22 +113,7 @@ create_defaults () {
     # bindir (default: riak in path)
     riak_path=$(which riak 2> /dev/null)
     bindir="${riak_path%/riak}"
-
-    # the most typical scenario is prefix/lib/riak/{lib,releases,erts-x.x.x}
-    libdir="${riak_path%/bin/riak}"
-    libdir="${libdir%/sbin/riak}/lib/riak"
-
-    if [ ! -d "$libdir" ]; then
-        # if that's not around, try lib64
-        libdir="${riak_path%/bin/riak}"
-        libdir="${libdir%/sbin/riak}/lib64/riak"
-        if [ ! -d "$libdir" ]; then
-            # if that's not it, then probably on OSX and path is something like:
-            # /path/to/riak_ee-x.x.x/{bin,lib,releases,erts-x.x.x}
-            libdir="${riak_path%/bin/riak}"
-            libdir="${libdir%/sbin/riak}"
-        fi
-    fi
+    set_libdir
 
     # start http port (default: start at 10000, next available increment of 100)
     httpport=10000
@@ -308,7 +319,26 @@ manage_create () {
     done
 
     # check paths for sanity
-    ertsdir=$(ls -d "${libdir}"/erts-* 2>/dev/null)
+    if [ -z "$bindir" ]; then
+        error_msg "Path to riak commands not specified and not found in PATH."
+        error_msg "Please check \$PATH for the riak commands, or use --bindir"
+        return 1
+    fi
+
+    if [ -z "$libdir" ]; then
+        # Try one last time to set libdir, since bindir is non-zero length and
+        # could have been set with --bindir
+        set_libdir
+
+        # Still empty? Error out
+        if [ -z "$libdir" ]; then
+            error_msg "Path to riak libs not specified and not able to be determined."
+            error_msg "Set \$PATH to include a packaged riak command, or use the option --libdir"
+            return 1
+        fi
+    fi
+
+    ertsdir=("${libdir}"/erts-*)
     if [ ! -x "$bindir"/riak ] || 
        [ ! -x "$bindir"/riak-admin ] ||
        [ ! -x "$bindir"/search-cmd ]; then
@@ -334,9 +364,8 @@ manage_create () {
 
     # look for existing cluster, warn/override
     if [ ! -z $cluster_dir ]; then
-        echo "Warning: Cluster ${cluster_name} exists in path:"
-        echo "${cluster_dir}"
-        echo "Exiting..."
+        error_msg "Error: Cluster ${cluster_name} exists in path:"
+        error_msg "${cluster_dir}"
         return 1
     fi
 
@@ -404,6 +433,8 @@ manage_create () {
         ln -sf "${ertsdir}" "${nodedir}"/${erts_dir///erts-*}
 
         # generate config for each node
+        cp "${template_dir}/${template}" "${nodedir}/etc/"
+
         cp "${template_dir}/${template}/app.config" "${nodedir}/etc/"
         cp "${template_dir}/${template}/vm.args" "${nodedir}/etc/"
         cp -R "${template_dir}/${template}/snmp" "${nodedir}/etc/"
