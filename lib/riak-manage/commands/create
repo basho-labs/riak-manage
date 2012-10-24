@@ -130,15 +130,17 @@ create_defaults () {
     # make a list of node config files to inspect for port values.
     # Setting these initially to /dev/null prevents grep from trying to
     # read stdin when there are no config files
-    configs=/dev/null
-    snmpconfigs=/dev/null
+    configs=( /dev/null )
+    snmpconfigs=( /dev/null )
 
     for pth in ${RIAK_CLUSTERS//:/ }; do
-        configs="$configs $( ls ${pth}/*/node*/etc/app.config 2>/dev/null )"
+        config_glob=( ${pth}/*/node*/etc/app.config )
+        configs=( ${configs[@]} ${config_glob[@]} )
     done
 
     for pth in ${RIAK_CLUSTERS//:/ }; do
-        snmpconfigs="$snmpconfigs $( ls ${pth}/*/node*/etc/snmp/agent/conf/agent.conf 2>/dev/null )"
+        snmpconfig_glob=( ${pth}/*/node*/etc/snmp/agent/conf/agent.conf )
+        snmpconfigs=( ${snmpconfigs[@]} ${snmpconfig_glob[@]} )
     done
 
     # Go through the conifg files and obtain the values being used.
@@ -174,7 +176,7 @@ create_defaults () {
     #        12100
     #          ...
 
-    httpports=( $( grep -h http $configs 2>/dev/null \
+    httpports=( $( grep -h http ${configs[@]} 2>/dev/null \
       | grep -v %% 2>/dev/null \
       | grep -v https 2>/dev/null \
       | grep -v http_ 2>/dev/null \
@@ -182,19 +184,19 @@ create_defaults () {
       | while read port; do echo ${port:0:$(( ${#port}-2 )) }00; done \
       | uniq ) )
 
-    pbports=( $( grep -h pb_port $configs 2>/dev/null \
+    pbports=( $( grep -h pb_port ${configs[@]} 2>/dev/null \
       | grep -v %% 2>/dev/null \
       | sed 's/.*{ *pb_port *, *\([0-9][0-9]*\) *},* */\1/' 2>/dev/null \
       | while read port; do echo ${port:0:$(( ${#port}-2 )) }00; done \
       | uniq ) )
 
-    hoports=( $( grep -h handoff_port $configs 2>/dev/null \
+    hoports=( $( grep -h handoff_port ${configs[@]} 2>/dev/null \
       | grep -v %% 2>/dev/null \
       | sed 's/.*{ *handoff_port *, *\([0-9][0-9]*\) *},* */\1/' 2>/dev/null \
       | while read port; do echo ${port:0:$(( ${#port}-2 )) }00; done \
       | uniq ) )
 
-    snmpports=( $( grep -h intAgentUDPPort $snmpconfigs 2>/dev/null \
+    snmpports=( $( grep -h intAgentUDPPort ${snmpconfigs[@]} 2>/dev/null \
       | sed 's/.*{ *intAgentUDPPort *, *\([0-9][0-9]*\) *}\./\1/' 2>/dev/null \
       | while read port; do echo ${port:0:$(( ${#port}-2 )) }00; done \
       | uniq ) )
@@ -210,19 +212,19 @@ create_defaults () {
 
     # Go through the used ports and remove those from port lists
     for port in ${httpports[@]}; do
-        unset httpportlist[$port]
+        unset 'httpportlist[$port]'
     done
 
     for port in ${pbports[@]}; do
-        unset pbportlist[$port]
+        unset 'pbportlist[$port]'
     done
 
     for port in ${hoports[@]}; do
-        unset hoportlist[$port]
+        unset 'hoportlist[$port]'
     done
 
     for port in ${snmpports[@]}; do
-        unset snmpportlist[$port]
+        unset 'snmpportlist[$port]'
     done
 
     # Take the first port from each port list as the start port to use
