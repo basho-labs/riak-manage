@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
 
+# The following variables will be set for the purpose of aiding subcommands. All
+# bets are off for any other variables used in this script before subcommands
+# are executed.
+#
+# bin_name     - The actual name of this script after all links are resolved.
+# cmd_dir      - The directory containing subcommand files.
+# template_dir - The base template directory.
+# verbose      - Option to determine whether to print verbose messages.
+# uselogger    - Option to determine if messages should also be logged.
+# cluster_name - Name of cluster given to manage. May be empty.
+# cluster_dir  - Path to dir containing cluster_name dir. May be empty.
+
 # Turn on extended globbing
-shopt -s extglob
-shopt -s nullglob
+shopt -s extglob nullglob
 
 # If RIAK_CLUSTERS is not set exit with an error
 if [ -z "$RIAK_CLUSTERS" ]; then
@@ -10,49 +21,59 @@ if [ -z "$RIAK_CLUSTERS" ]; then
     exit 1
 fi
 
-# Need to determine the script location and prefix to the needed bin and lib
-# directories
+# Need to determine the script location and prefix to the needed lib directory.
+# The prefix should be the directory that contains the riak-manage directory.
+# i.e. /users/username/gitclones/riak-manage (contains lib/riak-manage)
+#      /usr (contains lib/riak-manage)
+
+# Get the command used to start this script
 target=$0
 
 # If executing via a series of symlinks, resolve them all the way back to the
-# script itself
+# script itself. Some danger here of infinitely cycling.
 while [ -h "$target" ]; do
-    link=$(ls -ld "$target") # get a listing with name -> name 
-    link="${link#*-> }"      # extract the rightmost part of the symlink
+    link=$(readlink "$target")
     if [ "${link:0:1}" = "/" ]; then
         # link path is absolute, just need to follow it
         target="$link"
     else
         # link path is relative, need to relatively follow it
         target="${target%/*}"
-        target="$target/$link"
+        target="${target}/${link}"
     fi
 done
 
-# Have the script itself now, go to its directory and get its full path,
-# removing /bin from the end.  This takes care of relative invocations like
-# ./$bin_name
-prefix=$(cd ${target%/*} && echo $PWD${target##*/*})
+# Now target should be like the following, where 'script' is not a symlink:
+# /some/path/to/the/actual/script
+
+# Get the script name by removing everything up to the last /
+bin_name="${target##*/}"
+
+# Get the script path, go there, and resolve the full path of symlinks with pwd
+prefix=$(cd ${target%/$bin_name} && pwd -P)
+
+# Remove /bin from the prefix if there is one (i.e. /usr/bin)
 prefix=${prefix%/bin}
 
+# prefix should now be to something like /usr or /path/to/gitclone/riak-manage
+
 # Set some additional convenience variables
-bin_name="riak-manage"
-libdir="${prefix}/lib/shell/$bin_name"
-cmddir="${prefix}/lib/shell/$bin_name/commands"
-templatedir="${prefix}/lib/shell/$bin_name/templates"
+cmd_dir="${prefix}/lib/${bin_name}/commands"
+template_dir="${prefix}/lib/${bin_name}/templates"
+verbose=0   # default to not verbose
 uselogger=0 # might do some fun logging stuff later
 
 # Get common library functions
-if [ -f "${cmddir}/common" ]; then
-    . "${cmddir}/common"
+if [ -f "${cmd_dir}/common" ]; then
+    . "${cmd_dir}/common"
 else
-    echo "Common functions file ${cmddir}/common could not be read" >&2
+    echo "Common functions file ${cmd_dir}/common could not be read" >&2
     exit 1
 fi
 
 # Make sure there's a commands directory
-if [ ! -d ${cmddir} ]; then
-    error_msg "Error obtaining commands. Check ${cmddir}"
+if [ ! -d ${cmd_dir} ]; then
+    error_msg "Error obtaining commands. Check ${cmd_dir}"
     exit 1
 fi
 
@@ -62,30 +83,30 @@ fi
 # to work even if a cluster name is given.
 
 # Make sure we can load help and info. If not, that's a red flag.
-if [ -f "${cmddir}/help" ] && [ -f "${cmddir}/info" ]; then
-    . "${cmddir}/help"
+if [ -f "${cmd_dir}/help" ] && [ -f "${cmd_dir}/info" ]; then
+    . "${cmd_dir}/help"
 else
     error_msg "Could not load essential commands. Please check your paths."
     exit 1
 fi
 
-# No command was supplied. Try to error out helpfully
-if [ $# -eq 0 ]; then
+# No command was supplied. Try to error out helpfully.
+if [ 0 -eq $# ]; then
     manage_help
     exit 1
 fi
 
 # At least one argument given. If is help, run help with any arguments supplied.
 # Exit with help's return value.
-if [ $1 = "help" ]; then
+if [ "help" = $1 ]; then
     manage_help ${@:2:$#}
     exit $?
 fi
 
 # If the argument is info, run info with the arguments supplied.
 # Exit with info's return value.
-if [ $1 = "info" ]; then
-    . "${cmddir}/info"
+if [ "info" = $1 ]; then
+    . "${cmd_dir}/info"
     manage_info ${@:2:$#}
     exit $?
 fi
@@ -104,17 +125,17 @@ cmd=$1
 shift
 
 # Ensure the command exists
-if [ ! -f "${cmddir}/${cmd}" ]; then
+if [ ! -f "${cmd_dir}/${cmd}" ]; then
     error_msg "Command '$cmd' not found. See '$bin_name help' for usage."
     exit 1
 fi
 
 # Handle a special case of help dyslexia, e.g.:
 #   riak-manage join-all help
-if [ $# -eq 0 -a $cmd = "help" ]; then
+if [ 0 -eq $# ] && [ "help" = $cmd ]; then
     # See if the 'cluster_name' is actually a command that the user probably
     # wants help information for.
-    if [ -f "${cmddir}/${cluster_name}" ]; then
+    if [ -f "${cmd_dir}/${cluster_name}" ]; then
         manage_help ${cluster_name}
         exit 0
     fi
@@ -124,7 +145,7 @@ fi
 function_args=${@:1:$#}
 
 # Find the directory that the existing cluster is in, if any. Don't warn if not
-# found, since some commands such as 'config' create these directories.
+# found, since some commands such as 'create' create these directories.
 cluster_dir=
 for pth in ${RIAK_CLUSTERS//:/ }; do
     if [ -d "${pth}/${cluster_name}" ]; then
@@ -135,10 +156,9 @@ done
 
 # Dispatch the command with all of the following arguments to the appropriate,
 # sourced function
-. "${cmddir}/${cmd}"
+. "${cmd_dir}/${cmd}"
 manage_$cmd $function_args
-exit_code=$?
 
 # Exit with the exit code returned by the command
-exit $exit_code
+exit $?
 

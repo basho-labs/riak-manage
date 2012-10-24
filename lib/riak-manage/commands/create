@@ -293,14 +293,14 @@ manage_create () {
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     *)
-                        if [ "$OPTERR" = 1 ] && [ "${optspec:0:1}" != ":" ]; then
+                        if [ 1 = "$OPTERR" ] && [ ":" != "${optspec:0:1}" ]; then
                             echo "Unknown option --${OPTARG}" >&2
                         fi
                         ;;
                 esac;;
         # single character options
         *)
-            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+            if [ 1 != "$OPTERR" ] || [ ":" = "${optspec:0:1}" ]; then
                 echo "Non-option argument: '-${OPTARG}'" >&2
             fi
             ;;
@@ -404,9 +404,9 @@ manage_create () {
         ln -sf "${ertsdir}" "${nodedir}"/${erts_dir///erts-*}
 
         # generate config for each node
-        cp "${templatedir}/${template}/app.config" "${nodedir}/etc/"
-        cp "${templatedir}/${template}/vm.args" "${nodedir}/etc/"
-        cp -R "${templatedir}/${template}/snmp" "${nodedir}/etc/"
+        cp "${template_dir}/${template}/app.config" "${nodedir}/etc/"
+        cp "${template_dir}/${template}/vm.args" "${nodedir}/etc/"
+        cp -R "${template_dir}/${template}/snmp" "${nodedir}/etc/"
 
         # replace the template stand-ins with the given config options
         sed -i.template -e "s#RIAK_MANAGE_NODENET#$nodenet#" \
