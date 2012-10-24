@@ -2,6 +2,33 @@
 
 A tool for managing Riak clusters.
 
+## Installation
+
+Requirements: 
+
+* Bash 3.x or 4.x
+* POSIX grep, sed, awk, uniq, ln, cp, logger, du
+* readlink (BSD or GNU)
+* Riak (for local test clusters)
+* OpenSSH (for planned remote cluster management)
+
+To install from source, clone this repository or [download and extract a
+tarball](https://github.com/basho/riak-manage/tarball/master) somewhere like
+/opt/riak-manage or in your home directory. Then, create a symlink to the main
+riak-manage script in a directory that is in $PATH such as /usr/bin, /usr/sbin,
+or /usr/local/bin.
+
+Packages may be forthcoming. The riak-manage script also supports being placed
+in the bin or sbin directory of a prefix, and the riak-manage directory in the
+lib directory of that same prefix. For example:
+
+```
+/usr/sbin/riak-manage
+/usr/lib/riak-manage/{commands,templates}
+```
+
+## Getting started
+
 To get started with riak-manage, first export RIAK_CLUSTERS to a path:
 ```
 export RIAK_CLUSTERS=$HOME/clusters
