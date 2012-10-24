@@ -52,8 +52,9 @@ bin_name="${target##*/}"
 # Get the script path, go there, and resolve the full path of symlinks with pwd
 prefix=$(cd ${target%/$bin_name} && pwd -P)
 
-# Remove /bin from the prefix if there is one (i.e. /usr/bin)
+# Remove /bin and /sbin from the prefix if there is one (i.e. /usr/bin)
 prefix=${prefix%/bin}
+prefix=${prefix%/sbin}
 
 # prefix should now be to something like /usr or /path/to/gitclone/riak-manage
 
