@@ -2,6 +2,9 @@
 
 A tool for managing Riak clusters.
 
+## Beta Software
+* This software should **not be used in a production environment**.
+
 ## Installation
 
 Requirements: 
