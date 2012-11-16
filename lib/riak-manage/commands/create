@@ -58,7 +58,7 @@ DESCRIPTION
  --nodes NUM       Number of nodes the cluster should have available.
                    Default: 3
 
- --backend BACKEND Use bitcask, eleveldb, or memory backend.
+ --backend BACKEND Use bitcask, eleveldb, hanoidb, or memory backend.
                    Default: bitcask
 
  --nodenet IP      Network to use in -name setting in vm.args.
