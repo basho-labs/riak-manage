@@ -85,6 +85,12 @@ DESCRIPTION
  --snmpport PORT   SNMP port start range. Incremented by 1 for each node.
                    Default: Calculated starting at 16000 in increments of 100.
 
+ --mgrnet IP       Network to use for Cluster Manager.
+                   Default: 127.0.0.1
+
+ --mgrport PORT    Cluster manager port start range. Incremented by 1 for each node.
+                   Default: Calculated starting at 18000 in increments of 100.
+
 EOF
 
     return 0
@@ -124,6 +130,7 @@ create_defaults () {
     httpnet="127.0.0.1"
     pbnet="127.0.0.1"
     snmpnet="127,0,0,1"
+    mgrnet="127.0.0.1"
 
     # These could be up blank. If so, and they don't get overridden with
     # options, then errors will be thrown.
@@ -147,6 +154,8 @@ create_defaults () {
     # start snmp port (start at 16000, next available increment of 100)
     snmpport=16000
 
+    # start cluster manager port (start at 18000, next available increment of 100)
+    mgrport=18000
     # make a list of node config files to inspect for port values.
     # Setting these initially to /dev/null prevents grep from trying to
     # read stdin when there are no config files
@@ -221,6 +230,11 @@ create_defaults () {
       | while read port; do echo ${port:0:$(( ${#port}-2 )) }00; done \
       | uniq ) )
 
+    mgrports=( $( grep -h cluster_mgr ${configs[@]} 2>/dev/null \
+      | sed 's/.*{ *cluster_mgr *, *{[^,]*, *\([0-9][0-9]*\) *}}.*/\1/' 2>/dev/null \
+      | while read port; do echo ${port:0:$(( ${#port}-2 )) }00; done \
+      | uniq ) )
+
     # Create the lists of possible ports. The ports numbers are used as both the
     # array index and value, to make them easy to find for the next step.
     for ((i=0; i<20; i++)); do
@@ -228,6 +242,7 @@ create_defaults () {
         pbportlist[$(( 12000+$i*100 ))]=$(( 12000+$i*100 ))   # 12000 12100 12200
         hoportlist[$(( 14000+$i*100 ))]=$(( 14000+$i*100 ))   # 14000 14100 14200
         snmpportlist[$(( 16000+$i*100 ))]=$(( 16000+$i*100 )) # 16000 16100 16200
+        mgrportlist[$(( 18000+$i*100 ))]=$(( 18000+$i*100 )) # 16000 16100 16200
     done
 
     # Go through the used ports and remove those from port lists
@@ -247,11 +262,17 @@ create_defaults () {
         unset 'snmpportlist[$port]'
     done
 
+    for port in ${mgrports[@]}; do
+        unset 'mgrportlist[$port]'
+    done
+
+   
     # Take the first port from each port list as the start port to use
     httpport=${httpportlist[@]:1:1}
     pbport=${pbportlist[@]:1:1}
     hoport=${hoportlist[@]:1:1}
     snmpport=${snmpportlist[@]:1:1}
+    mgrport=${mgrportlist[@]:1:1}
 
     return 0
 }
@@ -323,6 +344,14 @@ manage_create () {
                         ;;
                     snmpport)
                         snmpport="${!OPTIND}"
+                        OPTIND=$(( $OPTIND + 1 ))
+                        ;;
+                    mgrport)
+                        mgrport="${!OPTIND}"
+                        OPTIND=$(( $OPTIND + 1 ))
+                        ;;
+                    mgrnet)
+                        mgrnet="${!OPTIND}"
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     *)
@@ -420,6 +449,13 @@ manage_create () {
             { error_msg "Failed to copy riak-repl command to ${cluster_path}/${cluster_name}/cmds/"; return 1; }
         riak_cmds=( riak riak-admin search-cmd riak-repl )
     fi
+    
+    # if there's a env.sh, get it too
+    if [ -f "${libdir}/lib/env.sh" ]; then
+	    cp "${libdir}/lib/env.sh" "${cluster_path}/${cluster_name}/cmds/" || \
+            { error_msg "Failed to copy env.sh command to ${cluster_path}/${cluster_name}/cmds/"; return 1; }
+	    riak_cmds[${#riak_cmds[*]}]="env.sh"
+    fi
 
     # Loop through the commands, editing their setup values to suit
     for riak_cmd in ${riak_cmds[@]}; do
@@ -427,6 +463,7 @@ manage_create () {
         # are literal and not executed by this script.
         # Also note that & must be escaped on the RHS of a sed.
         sed -i.bak \
+            -e 's#/usr/lib/riak/lib/env.sh#${0%/*}/env.sh#' \
             -e 's#^RUNNER_SCRIPT_DIR=.*#RUNNER_SCRIPT_DIR=$(cd ${0%/*} \&\& pwd)#' \
             -e 's#^RUNNER_BASE_DIR=.*#RUNNER_BASE_DIR=${RUNNER_SCRIPT_DIR%/*}#' \
             -e 's#^RUNNER_ETC_DIR=.*#RUNNER_ETC_DIR=$RUNNER_BASE_DIR/etc#' \
@@ -506,6 +543,8 @@ manage_create () {
                         -e "s#RIAK_MANAGE_ETCDIR#${nodedir}/etc#" \
                         -e "s#RIAK_MANAGE_LOGDIR#${nodedir}/log#" \
                         -e "s#RIAK_MANAGE_RING_SIZE#${ring_size}#" \
+                        -e "s#RIAK_MANAGE_MGR_PORT#$(( $mgrport + $i ))#" \
+                        -e "s#RIAK_MANAGE_MGR_NET#${mgrnet}#" \
                         "${nodedir}/etc/app.config"
 
         if [ 0 -ne $? ]; then
