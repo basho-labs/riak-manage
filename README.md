@@ -4,7 +4,7 @@ A tool for managing Riak clusters.
 
 ## Beta Software
 * This software should **not be used in a production environment**.
-* This software is **not fully compatable with all new features of Riak 1.4.x**. Please refer to the issues page for a full description of upcoming features/
+* This software is **not fully compatable with all new features of Riak 1.4.x**. Please refer to the issues page for a full description of upcoming features.
 
 ## Installation
 
