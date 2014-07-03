@@ -315,19 +315,19 @@ manage_create () {
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     httpnet)
-                        net="${!OPTIND}"
+                        httpnet="${!OPTIND}"
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     pbnet)
-                        net="${!OPTIND}"
+                        pbnet="${!OPTIND}"
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     snmpnet)
-                        net="${!OPTIND}"
+                        snmpnet="${!OPTIND}"
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     nodenet)
-                        net="${!OPTIND}"
+                        nodenet="${!OPTIND}"
                         OPTIND=$(( $OPTIND + 1 ))
                         ;;
                     httpport)
