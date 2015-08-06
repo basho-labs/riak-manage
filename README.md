@@ -117,3 +117,4 @@ Basho Labs repos survive because of community contribution. Review the details i
 ## License and Authors
 The riak-manage project is Open Source software released under the Apache 2.0 License. Please see the [LICENSE](LICENSE) file for full license details.
 
+* Author: [fprimex](https://github.com/fprimex)
