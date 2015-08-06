@@ -1,10 +1,16 @@
 # riak-manage
 
-A tool for managing Riak clusters.
+The riak-manage toolset is a project to manage Riak KV clusters. [Riak](http://basho.com/riak/) is an open source, distributed database that focuses on high availability, horizontal scalability, and *predictable* latency.
 
-## Beta Software
+**Notes on this Beta project**:
 * This software should **not be used in a production environment**.
 * This software is **not fully compatable with all new features of Riak 1.4.x**. Please refer to the issues page for a full description of upcoming features.
+* If you'd like to shepard this project into the 2.x compatibility, open an issue stating so and you will be made a maintainer!
+
+1. [Installation](#installation)
+2. [Getting Started](#getting-started)
+3. [Contributing](#contributing)
+5. [License and Authors](#license-and-authors)
 
 ## Installation
 
@@ -31,7 +37,7 @@ lib directory of that same prefix. For example:
 /usr/lib/riak-manage/{commands,templates}
 ```
 
-## Getting started
+## Getting Started
 
 To get started with riak-manage, first export RIAK_CLUSTERS to a path:
 ```
@@ -47,7 +53,7 @@ call all of the following commands without needing to do any additional
 configuration.
 
 
-## Getting help, creating a cluster
+### Getting help, creating a cluster
 Now, execute each of the following and get familiar with riak-manage:
 
 ```
@@ -84,7 +90,7 @@ You can continue creating clusters and riak-manage will figure out all of the
 ports for the additional clusters so that nothing conflicts. This works for up
 to 20 automatically managed clusters, then you are on your own.
 
-## Templates
+### Templates
 
 Templates are just directories containing app.config, vm.args, and other
 configuration files that get bootstrapped by cp and sed. Have a look at the
@@ -94,7 +100,7 @@ variables will be replaced with values during create. To specify the use of a
 template during create, use `--template NAME`. See `riak-manage help create`
 for more.
 
-## Writing commands
+### Writing commands
 
 Contributing your own comands is pretty easy. An example command, called
 `a-sample-cmd`, is present that shows how to get started. Just copy
@@ -103,4 +109,11 @@ corresponding to what you wish the command to be, then implement the three
 hooks as shown to perform the desired actions.
 
 See the `node`, `riak`, and `join-all` commands for more examples.
+
+## Contributing
+
+Basho Labs repos survive because of community contribution. Review the details in [CONTRIBUTING.md](CONTRIBUTING.md) in order to give back to this project.
+
+## License and Authors
+The riak-manage project is Open Source software released under the Apache 2.0 License. Please see the [LICENSE](LICENSE) file for full license details.
 
